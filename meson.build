@@ -2,8 +2,8 @@
 # Cact wifid — Meson build system
 # ==============================================================================
 #
-#   meson setup build-meson --cross-file cross/i686-cact-clang.ini \
-#       -Dcactlib=../CactLibc-x86_32
+#   meson setup build-meson --cross-file cross/x86_64-cact-clang.ini \
+#       -Dcactlib=../CactLibc-x86_64
 #   ninja -C build-meson            # build-meson/wifid
 #   ninja -C build-meson stage      # copy into -Dlr_sbin
 #
@@ -57,7 +57,7 @@ wifid_lib = static_library('wifid', 'main.c', c_args: c_args)
 wifid = custom_target('wifid',
   output: 'wifid',
   input: wifid_lib,
-  command: [ld, '-m', 'elf_i386', '-pie', '--dynamic-linker=/lib/ld.so',
+  command: [ld, '-m', 'elf_x86_64', '-pie', '--dynamic-linker=/lib/ld.so',
             '--hash-style=both', '-nostdlib', '--gc-sections',
             '-T', src_root / 'link.ld', '-o', '@OUTPUT@',
             start_o,
