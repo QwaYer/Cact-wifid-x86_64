@@ -15,6 +15,9 @@
  *   file=/var/log/wifid.log
  *   console=0
  *   interval=5
+ *   ssid=MyNetwork      (empty = do not connect)
+ *   passphrase=secret
+ *   wds=0               (1 = repeater/WDS 4-address uplink; passed to wljoin)
  */
 
 #include <stdint.h>
@@ -49,6 +52,7 @@ static char wifi_node[MAX_NODE] = ""; /* "" = no wireless devices */
  * drops on its own. */
 static char  cfg_ssid[33] = "";
 static char  cfg_pass[64] = "";
+static int   cfg_wds      = 0;    /* repeater/WDS (4-address) uplink */
 static pid_t wljoin_pid   = -1;
 static char *spawn_envp[] = { "PATH=/usr/bin:/usr/sbin", "HOME=/", NULL };
 
@@ -61,12 +65,14 @@ static const char default_config[] =
     "# interval   - /dev poll period (sec)\n"
     "# ssid       - network to join (empty = do not connect)\n"
     "# passphrase - WPA2 passphrase (empty = open network)\n"
+    "# wds        - repeater/WDS (4-address) uplink (0|1)\n"
     "\n"
     "file=/var/log/wifid.log\n"
     "console=0\n"
     "interval=5\n"
     "#ssid=MyNetwork\n"
-    "#passphrase=secret\n";
+    "#passphrase=secret\n"
+    "#wds=0\n";
 
 static void ensure_dir(const char *path) {
     (void)mkdir(path, 0755);
@@ -115,6 +121,8 @@ static void config_load(void) {
         } else if (strcmp(key, "passphrase") == 0) {
             strncpy(cfg_pass, val, sizeof(cfg_pass) - 1);
             cfg_pass[sizeof(cfg_pass) - 1] = '\0';
+        } else if (strcmp(key, "wds") == 0) {
+            cfg_wds = (val[0] == '1' || val[0] == 'y' || val[0] == 'Y');
         }
     }
     fclose(f);
@@ -216,13 +224,21 @@ static void start_wljoin(void) {
     if (wljoin_pid > 0 || cfg_ssid[0] == '\0')
         return;
 
-    snprintf(line, sizeof(line), "wifid: joining '%s' ...\n", cfg_ssid);
+    snprintf(line, sizeof(line), "wifid: joining '%s'%s ...\n", cfg_ssid,
+             cfg_wds ? " (repeater/WDS)" : "");
     log_event(line);
     printf("%s", line);
 
     pid = fork();
     if (pid == 0) {
-        char *argv[] = { "wljoin", cfg_ssid, cfg_pass, NULL };
+        char *argv[5];
+        int k = 0;
+        argv[k++] = "wljoin";
+        if (cfg_wds)
+            argv[k++] = "--wds";   /* 4-address repeater uplink */
+        argv[k++] = cfg_ssid;
+        argv[k++] = cfg_pass;
+        argv[k] = NULL;
         execve("/usr/sbin/wljoin", argv, spawn_envp);
         _exit(127);
     }
@@ -307,7 +323,8 @@ int main(int argc, char *argv[]) {
 
     if (cfg_ssid[0]) {
         char line[96];
-        snprintf(line, sizeof(line), "wifid: profile '%s'\n", cfg_ssid);
+        snprintf(line, sizeof(line), "wifid: profile '%s'%s\n", cfg_ssid,
+                 cfg_wds ? " (repeater/WDS)" : "");
         log_event(line);
         printf("%s", line);
     }
